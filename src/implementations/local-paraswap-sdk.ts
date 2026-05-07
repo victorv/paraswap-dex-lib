@@ -257,6 +257,10 @@ export class LocalParaswapSDK implements IParaSwapSDK {
                   );
 
                   if (dexLibExchange && dexLibExchange.preProcessTransaction) {
+                    const dexNeedWrapNative =
+                      typeof dex.needWrapNative === 'function'
+                        ? dex.needWrapNative(priceRoute, swap, se)
+                        : dex.needWrapNative;
                     const { recipient } =
                       priceRoute.version === ParaSwapVersion.V5
                         ? this.transactionBuilderV5.getDexCallsParams(
@@ -276,7 +280,7 @@ export class LocalParaswapSDK implements IParaSwapSDK {
                             swapIndex,
                             se,
                             minMaxAmount.toString(),
-                            dex,
+                            dexNeedWrapNative,
                             executionContractAddress,
                           );
 
