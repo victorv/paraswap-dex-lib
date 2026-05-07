@@ -108,8 +108,6 @@ export class GenericSwapTransactionBuilder {
 
   executorDetector: ExecutorDetector;
 
-  protected newDexsLower: Record<string, NewDexEntry>;
-
   constructor(
     protected dexAdapterService: DexAdapterService,
     protected wExchangeNetworkToKey = Weth.dexKeysWithNetwork.reduce<
@@ -121,7 +119,9 @@ export class GenericSwapTransactionBuilder {
       return prev;
     }, {}),
     protected newDexsApiUrl?: string,
-    newDexs?: NewDexsConfig,
+    // Held by reference, not snapshotted: callers can mutate this map between
+    // `buildCalls` invocations and the next call will see the new state.
+    protected newDexs?: NewDexsConfig,
   ) {
     this.abiCoder = new AbiCoder();
     this.erc20Interface = new Interface(ERC20ABI);
@@ -130,12 +130,6 @@ export class GenericSwapTransactionBuilder {
       this.dexAdapterService.dexHelper.config.data.augustusV6Address!;
     this.executorDetector = new ExecutorDetector(
       this.dexAdapterService.dexHelper,
-    );
-    this.newDexsLower = Object.fromEntries(
-      Object.entries(newDexs ?? {}).map(([key, value]) => [
-        key.toLowerCase(),
-        { key, ...value },
-      ]),
     );
   }
 
@@ -169,6 +163,19 @@ export class GenericSwapTransactionBuilder {
     );
   }
 
+  protected findNewDex(exchange: string): NewDexEntry | undefined {
+    if (!this.newDexs) return undefined;
+
+    const exchangeKey = exchange.toLowerCase();
+    const newDexKey = Object.keys(this.newDexs).find(
+      dexKey => dexKey.toLowerCase() === exchangeKey,
+    );
+
+    return newDexKey === undefined
+      ? undefined
+      : { key: newDexKey, ...this.newDexs[newDexKey] };
+  }
+
   protected async buildCalls(
     priceRoute: OptimalRate,
     minMaxAmount: string,
@@ -180,7 +187,7 @@ export class GenericSwapTransactionBuilder {
       priceRoute.bestRoute.flatMap((route, routeIndex) =>
         route.swaps.flatMap((swap, swapIndex) =>
           swap.swapExchanges.map(async se => {
-            const newDex = this.newDexsLower[se.exchange.toLowerCase()];
+            const newDex = this.findNewDex(se.exchange);
             const executorAddress = bytecodeBuilder.getAddress();
 
             let dexNeedWrapNative: boolean;
