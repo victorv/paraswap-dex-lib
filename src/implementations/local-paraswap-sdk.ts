@@ -270,7 +270,7 @@ export class LocalParaswapSDK implements IParaSwapSDK {
                             swapIndex,
                             se,
                             minMaxAmount.toString(),
-                            dex,
+                            dexNeedWrapNative,
                             executionContractAddress,
                           )
                         : this.transactionBuilder.getDexCallsParams(
