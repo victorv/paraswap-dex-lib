@@ -12,7 +12,9 @@ function buildTesseraRoute(params: {
   destToken: string;
   destDecimals: number;
   destAmount: string;
+  side?: 'SELL' | 'BUY';
 }): OptimalRate {
+  const side = params.side ?? 'SELL';
   return {
     blockNumber: params.blockNumber,
     network: params.network,
@@ -48,11 +50,12 @@ function buildTesseraRoute(params: {
     gasCostUSD: '0',
     gasCost: '150000',
     others: [],
-    side: 'SELL',
+    side,
     version: '6.2',
     contractAddress: '0x6a000f20005980200259b80c5102003040001068',
     tokenTransferProxy: '0x6a000f20005980200259b80c5102003040001068',
-    contractMethod: 'swapExactAmountIn',
+    contractMethod:
+      side === 'SELL' ? 'swapExactAmountIn' : 'swapExactAmountOut',
     partnerFee: 0,
     srcUSD: '0',
     destUSD: '0',
@@ -118,6 +121,24 @@ describe('Tessera E2E', () => {
       });
       await testPriceRoute(route);
     });
+
+    it('USDC → WETH (BUY)', async () => {
+      const route = buildTesseraRoute({
+        ...baseUsdcShared,
+        destToken: baseWeth.address,
+        side: 'BUY',
+      });
+      await testPriceRoute(route);
+    });
+
+    it('USDC → ETH (BUY, unwraps WETH)', async () => {
+      const route = buildTesseraRoute({
+        ...baseUsdcShared,
+        destToken: ETHER_ADDRESS,
+        side: 'BUY',
+      });
+      await testPriceRoute(route);
+    });
   });
 
   describe('BSC', () => {
@@ -172,6 +193,24 @@ describe('Tessera E2E', () => {
       const route = buildTesseraRoute({
         ...bscUsdtShared,
         destToken: ETHER_ADDRESS,
+      });
+      await testPriceRoute(route);
+    });
+
+    it('WBNB → USDT (BUY)', async () => {
+      const route = buildTesseraRoute({
+        ...bscWbnbShared,
+        srcToken: bscWbnb.address,
+        side: 'BUY',
+      });
+      await testPriceRoute(route);
+    });
+
+    it('BNB → USDT (BUY, wraps to WBNB)', async () => {
+      const route = buildTesseraRoute({
+        ...bscWbnbShared,
+        srcToken: ETHER_ADDRESS,
+        side: 'BUY',
       });
       await testPriceRoute(route);
     });

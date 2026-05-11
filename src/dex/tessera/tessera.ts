@@ -38,21 +38,21 @@ export class Tessera extends SimpleExchange implements IDexTxBuilder<null> {
     srcToken: Address,
     destToken: Address,
     srcAmount: NumberAsString,
-    _destAmount: NumberAsString,
+    destAmount: NumberAsString,
     recipient: Address,
     _data: null,
     side: SwapSide,
   ): DexExchangeParam {
-    if (side !== SwapSide.SELL) {
-      throw new Error('Tessera: BUY not supported');
-    }
-
     const tokenIn = this.dexHelper.config.wrapETH(srcToken);
     const tokenOut = this.dexHelper.config.wrapETH(destToken);
 
+    const isSell = side === SwapSide.SELL;
+    const amountSpecified = isSell ? srcAmount : `-${destAmount}`;
+    const amountCheck = isSell ? '0' : srcAmount;
+
     const swapCalldata = this.routerInterface.encodeFunctionData(
       'tesseraSwapWithAllowances',
-      [tokenIn, tokenOut, srcAmount, '0', recipient, '0x'],
+      [tokenIn, tokenOut, amountSpecified, amountCheck, recipient, '0x'],
     );
 
     return {
