@@ -9,7 +9,7 @@ import {
 } from '../../generic-swap-transaction-builder';
 import { Metric } from './metric';
 
-const METRIC_REMOTE_BASE_URL = 'http://api-go.staging.paraswap.io';
+const METRIC_REMOTE_BASE_URL = 'http://api.example.paraswap.io';
 const METRIC_REMOTE_DEX_KEY = 'metric';
 const PARITY_HTTP_TIMEOUT_MS = 10_000;
 
