@@ -80,6 +80,10 @@ export class LocalParaswapSDK implements IParaSwapSDK {
     );
     this.transactionBuilder = new GenericSwapTransactionBuilder(
       this.dexAdapterService,
+      undefined,
+      undefined,
+      undefined,
+      true,
     );
     this.transactionBuilderV5 = new TransactionBuilder(this.dexAdapterService);
 

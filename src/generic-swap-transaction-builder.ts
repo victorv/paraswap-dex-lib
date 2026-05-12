@@ -75,7 +75,9 @@ const remoteDexExchangeParamSchema = joi
   })
   .unknown(true);
 
-function normaliseRemoteDexExchangeParam(raw: unknown): DexExchangeParam {
+export function normaliseRemoteDexExchangeParam(
+  raw: unknown,
+): DexExchangeParam {
   return validateAndCast<DexExchangeParam>(
     raw,
     remoteDexExchangeParamSchema,
@@ -122,6 +124,7 @@ export class GenericSwapTransactionBuilder {
     // Held by reference, not snapshotted: callers can mutate this map between
     // `buildCalls` invocations and the next call will see the new state.
     protected newDexs?: NewDexsConfig,
+    protected skipApprovalCheck = false, // used only for testing outdated price routes
   ) {
     this.abiCoder = new AbiCoder();
     this.erc20Interface = new Interface(ERC20ABI);
@@ -881,11 +884,12 @@ export class GenericSwapTransactionBuilder {
       ),
     );
 
-    const approvals =
-      await this.dexAdapterService.dexHelper.augustusApprovals.hasApprovals(
-        spender,
-        tokenTargetMapping.map(t => t.params),
-      );
+    const approvals = this.skipApprovalCheck // used only for testing outdated price routes
+      ? tokenTargetMapping.map(t => false)
+      : await this.dexAdapterService.dexHelper.augustusApprovals.hasApprovals(
+          spender,
+          tokenTargetMapping.map(t => t.params),
+        );
 
     const dexExchangeBuildParams: DexExchangeBuildParam[] = [
       ...dexExchangeParams,
