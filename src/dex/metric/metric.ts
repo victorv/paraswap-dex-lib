@@ -4,6 +4,7 @@ import {
   AdapterExchangeParam,
   Address,
   DexExchangeParam,
+  GetDexParamOptions,
   NumberAsString,
 } from '../../types';
 import { IDexTxBuilder } from '../idex';
@@ -60,8 +61,16 @@ export class Metric
     recipient: Address,
     data: MetricData,
     side: SwapSide,
+    executorAddressOrOptions?: Address | GetDexParamOptions,
+    options?: GetDexParamOptions,
   ): DexExchangeParam {
-    const deadline = getLocalDeadlineAsFriendlyPlaceholder();
+    const getDexParamOptions =
+      typeof executorAddressOrOptions === 'object'
+        ? executorAddressOrOptions
+        : options;
+    const deadline = getLocalDeadlineAsFriendlyPlaceholder(
+      getDexParamOptions?.nowTimestampMs,
+    );
     const priceLimit = this.getPriceLimit(data.zeroForOne);
 
     const swapFunction =
