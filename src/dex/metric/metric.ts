@@ -61,15 +61,11 @@ export class Metric
     recipient: Address,
     data: MetricData,
     side: SwapSide,
-    executorAddressOrOptions?: Address | GetDexParamOptions,
+    _executorAddress?: Address,
     options?: GetDexParamOptions,
   ): DexExchangeParam {
-    const getDexParamOptions =
-      typeof executorAddressOrOptions === 'object'
-        ? executorAddressOrOptions
-        : options;
     const deadline = getLocalDeadlineAsFriendlyPlaceholder(
-      getDexParamOptions?.nowTimestampMs,
+      options?.nowTimestampMs,
     );
     const priceLimit = this.getPriceLimit(data.zeroForOne);
 

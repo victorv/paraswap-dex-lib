@@ -7,6 +7,7 @@ import {
   DexExchangeParam,
   ExchangePrices,
   ExchangeTxInfo,
+  GetDexParamOptions,
   Logger,
   NumberAsString,
   PoolLiquidity,
@@ -1163,7 +1164,12 @@ export class UniswapV3
     recipient: Address,
     data: UniswapV3Data,
     side: SwapSide,
+    _executorAddress?: Address,
+    options?: GetDexParamOptions,
   ): DexExchangeParam {
+    const deadline = getLocalDeadlineAsFriendlyPlaceholder(
+      options?.nowTimestampMs,
+    );
     const swapFunction =
       side === SwapSide.SELL
         ? UniswapV3Functions.exactInput
@@ -1175,14 +1181,14 @@ export class UniswapV3
       side === SwapSide.SELL
         ? {
             recipient,
-            deadline: getLocalDeadlineAsFriendlyPlaceholder(),
+            deadline,
             amountIn: srcAmount,
             amountOutMinimum: destAmount,
             path,
           }
         : {
             recipient,
-            deadline: getLocalDeadlineAsFriendlyPlaceholder(),
+            deadline,
             amountOut: destAmount,
             amountInMaximum: srcAmount,
             path,
