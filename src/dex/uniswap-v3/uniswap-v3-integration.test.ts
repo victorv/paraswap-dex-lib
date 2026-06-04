@@ -2531,7 +2531,7 @@ describe('Slipstream', () => {
         );
 
         expect(poolPrices).not.toBeNull();
-        checkPoolPrices(poolPrices!, amounts, SwapSide.SELL, dexKey);
+        checkPoolPrices(poolPrices!, amounts, SwapSide.BUY, dexKey);
 
         let falseChecksCounter = 0;
         await Promise.all(
