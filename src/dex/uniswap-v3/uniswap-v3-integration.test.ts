@@ -2565,7 +2565,7 @@ describe('Slipstream', () => {
         );
         console.log(`${TokenASymbol} Top Pools:`, poolLiquidity);
 
-        checkPoolsLiquidity(poolLiquidity, TokenB.address, dexKey);
+        checkPoolsLiquidity(poolLiquidity, TokenA.address, dexKey);
       });
     });
   });
