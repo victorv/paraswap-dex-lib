@@ -123,6 +123,86 @@ export interface UniswapV2Pair {
   checkExistenceAfter?: number;
 }
 
+/**
+ * Minimal record persisted per pair in the `<prefix>_<network>_<dexKey>_pairs`
+ * Redis hash.
+ *
+ * Only `exchange` and `checkExistenceAfter` are ever read back: `token0`/`token1`
+ * are already known by the caller that looks the pair up, and `pool` is an
+ * in-memory only event subscriber. Serializing the whole `UniswapV2Pair` used to
+ * store both full `Token` objects on every entry, which is pure redundancy and
+ * dominated the memory footprint of these hashes (the overwhelming majority of
+ * entries are negative "pair does not exist" records).
+ *
+ * Backward compatibility: legacy fat entries are a strict superset of this
+ * record, so they keep deserializing correctly - the extra fields are ignored.
+ */
+export interface UniswapV2PairCacheRecord {
+  // absent for a negative record, i.e. the pair does not exist (yet)
+  exchange?: Address;
+  // epoch ms after which a negative record must be re-checked on chain
+  checkExistenceAfter: number;
+}
+
+/**
+ * Parses a raw cache entry into a `UniswapV2PairCacheRecord`.
+ *
+ * Accepts both the current minimal shape and the legacy fat shape, and returns
+ * `null` for missing or malformed entries so that a corrupted value degrades
+ * into a cache miss instead of throwing.
+ */
+export function parsePairCacheRecord(
+  rawRecord: string | null,
+): UniswapV2PairCacheRecord | null {
+  if (!rawRecord) return null;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(rawRecord);
+  } catch {
+    return null;
+  }
+
+  if (typeof parsed !== 'object' || parsed === null) return null;
+
+  const { exchange, checkExistenceAfter } =
+    parsed as Partial<UniswapV2PairCacheRecord>;
+
+  return {
+    ...(exchange ? { exchange } : {}),
+    // a legacy/partial entry without the field behaves as already expired
+    checkExistenceAfter:
+      typeof checkExistenceAfter === 'number' ? checkExistenceAfter : 0,
+  };
+}
+
+/**
+ * A cached record is usable as long as the pair is known to exist, or the
+ * negative record has not expired yet.
+ */
+export function isPairCacheRecordFresh(
+  record: UniswapV2PairCacheRecord,
+): boolean {
+  return !!record.exchange || record.checkExistenceAfter > Date.now();
+}
+
+/**
+ * Rebuilds the in-memory pair from the tokens known by the caller plus the
+ * cached record, keeping the shape consumers expect.
+ */
+export function pairFromCacheRecord(
+  token0: Token,
+  token1: Token,
+  record: UniswapV2PairCacheRecord,
+): UniswapV2Pair {
+  return {
+    token0,
+    token1,
+    ...(record.exchange ? { exchange: record.exchange } : {}),
+    checkExistenceAfter: record.checkExistenceAfter,
+  };
+}
+
 export class UniswapV2EventPool extends StatefulEventSubscriber<UniswapV2PoolState> {
   decoder = (log: Log) => getTopicLogDecoder(this.iface).decode(log);
 
@@ -420,21 +500,12 @@ export class UniswapV2
     token0: Token,
     token1: Token,
   ): Promise<UniswapV2Pair | null> {
-    const cachedPairRaw = await this.dexHelper.cache.hget(
-      this.pairsHashCacheKey,
-      key,
+    const cachedRecord = parsePairCacheRecord(
+      await this.dexHelper.cache.hget(this.pairsHashCacheKey, key),
     );
 
-    const cachedPair = cachedPairRaw
-      ? (JSON.parse(cachedPairRaw) as UniswapV2Pair)
-      : null;
-
-    if (
-      cachedPair &&
-      (cachedPair.exchange ||
-        (cachedPair.checkExistenceAfter &&
-          cachedPair.checkExistenceAfter > Date.now()))
-    ) {
+    if (cachedRecord && isPairCacheRecordFresh(cachedRecord)) {
+      const cachedPair = pairFromCacheRecord(token0, token1, cachedRecord);
       this.pairs[key] = cachedPair;
       return cachedPair;
     }
@@ -458,14 +529,16 @@ export class UniswapV2
       return null;
     }
 
+    const record: UniswapV2PairCacheRecord = {
+      ...(pair.exchange ? { exchange: pair.exchange } : {}),
+      checkExistenceAfter:
+        Date.now() + UNISWAP_V2_RECHECK_PAIR_EXISTENCE_AFTER_MS,
+    };
+
     await this.dexHelper.cache.hset(
       this.pairsHashCacheKey,
       key,
-      JSON.stringify({
-        ...pair,
-        checkExistenceAfter:
-          Date.now() + UNISWAP_V2_RECHECK_PAIR_EXISTENCE_AFTER_MS,
-      }),
+      JSON.stringify(record),
     );
 
     this.pairs[key] = pair;
