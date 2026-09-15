@@ -1,4 +1,10 @@
-import { UniswapV2 } from '../uniswap-v2/uniswap-v2';
+import {
+  isPairCacheRecordFresh,
+  pairFromCacheRecord,
+  parsePairCacheRecord,
+  UniswapV2,
+  UniswapV2PairCacheRecord,
+} from '../uniswap-v2/uniswap-v2';
 import {
   Network,
   NULL_ADDRESS,
@@ -198,34 +204,31 @@ export class Solidly extends UniswapV2 {
     pairKeys: string[],
     pairs: SolidlyPair[],
   ): Promise<SolidlyPair[]> {
-    const cachedPairsRaw = await this.dexHelper.cache.hmget(
+    const cachedRecordsRaw = await this.dexHelper.cache.hmget(
       this.pairsHashCacheKey,
       pairKeys,
     );
 
-    const cachedPairs = cachedPairsRaw.map(p =>
-      p ? (JSON.parse(p) as SolidlyPair) : null,
-    );
+    const cachedRecords = cachedRecordsRaw.map(parsePairCacheRecord);
 
-    const shouldFetchFromRpc = cachedPairs.some(
-      (cachedPair, i): cachedPair is SolidlyPair => {
-        if (
-          cachedPair &&
-          (cachedPair.exchange ||
-            (cachedPair.checkExistenceAfter &&
-              cachedPair.checkExistenceAfter > Date.now()))
-        ) {
-          // prevent wiping initialized pool
-          if (!pairs[i]?.pool) {
-            pairs[i] = cachedPair;
-            this.pairs[pairKeys[i]] = cachedPair;
-          }
-          return false;
+    const shouldFetchFromRpc = cachedRecords.some((cachedRecord, i) => {
+      if (cachedRecord && isPairCacheRecordFresh(cachedRecord)) {
+        // prevent wiping initialized pool
+        if (!pairs[i]?.pool) {
+          // token0/token1/stable are known by the caller, only `exchange` and
+          // `checkExistenceAfter` are kept in the cache
+          const cachedPair: SolidlyPair = {
+            ...pairFromCacheRecord(token0, token1, cachedRecord),
+            stable: stableValues[i],
+          };
+          pairs[i] = cachedPair;
+          this.pairs[pairKeys[i]] = cachedPair;
         }
+        return false;
+      }
 
-        return true;
-      },
-    );
+      return true;
+    });
 
     if (!shouldFetchFromRpc) return pairs;
 
@@ -276,7 +279,16 @@ export class Solidly extends UniswapV2 {
     await this.dexHelper.cache.hmset(
       this.pairsHashCacheKey,
       Object.fromEntries(
-        pairsToCache.map(([key, pair]) => [key, JSON.stringify(pair)]),
+        pairsToCache.map(([key, pair]) => {
+          const record: UniswapV2PairCacheRecord = {
+            ...(pair.exchange ? { exchange: pair.exchange } : {}),
+            checkExistenceAfter:
+              pair.checkExistenceAfter ??
+              Date.now() + SOLIDLY_RECHECK_PAIR_EXISTENCE_AFTER_MS,
+          };
+
+          return [key, JSON.stringify(record)];
+        }),
       ),
     );
 
